@@ -298,6 +298,10 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		}
 		sc, err := oleutil.GetProperty(field, "NumericScale")
 		field.Release()
+		if val.VT == 1 /* VT_NULL */ {
+			dest[i] = nil
+			continue
+		}
 		switch typ.Val {
 		case 0: // ADEMPTY
 			dest[i] = nil
