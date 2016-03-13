@@ -3,8 +3,8 @@ package adodb
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/mattn/go-ole"
-	"github.com/mattn/go-ole/oleutil"
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
 	"io"
 	"math"
 	"math/big"
@@ -350,8 +350,13 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 72: // ADGUID
 			dest[i] = val.ToString()
 		case 128: // ADBINARY
-			sa := (*ole.SAFEARRAY)(unsafe.Pointer(uintptr(val.Val)))
-			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:sa.Bounds.Elements]
+			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
+			conv := &ole.SafeArrayConversion{sa}
+			elems, err := conv.TotalElements(0)
+			if err != nil {
+				return err
+			}
+			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
 		case 129: // ADCHAR
 			dest[i] = val.ToString() //uint8(val.Val)
 		case 130: // ADWCHAR
@@ -385,8 +390,13 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 204: // ADVARBINARY
 			// TODO
 		case 205: // ADLONGVARBINARY
-			sa := (*ole.SAFEARRAY)(unsafe.Pointer(uintptr(val.Val)))
-			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:sa.Bounds.Elements]
+			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
+			conv := &ole.SafeArrayConversion{sa}
+			elems, err := conv.TotalElements(0)
+			if err != nil {
+				return err
+			}
+			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
 		}
 	}
 	_, err = oleutil.CallMethod(rc.rc, "MoveNext")
