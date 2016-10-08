@@ -3,11 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-adodb"
-	"github.com/mattn/go-ole"
-	"github.com/mattn/go-ole/oleutil"
 	"os"
 	"time"
+
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
+	_ "github.com/mattn/go-adodb"
 )
 
 func createMdb(f string) error {
