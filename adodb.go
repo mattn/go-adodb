@@ -3,13 +3,14 @@ package adodb
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/go-ole/go-ole"
-	"github.com/go-ole/go-ole/oleutil"
 	"io"
 	"math"
 	"math/big"
 	"time"
 	"unsafe"
+
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
 )
 
 func init() {
@@ -161,9 +162,34 @@ func (s *AdodbStmt) bind(args []driver.Value) error {
 			}
 			param := unknown.ToIDispatch()
 			defer param.Release()
-			_, err = oleutil.PutProperty(param, "Value", v)
-			if err != nil {
-				return err
+			switch vv := v.(type) {
+			case string:
+				rs := []rune(vv)
+				println(len(rs))
+				if len(rs) > 512 {
+					for len(rs) > 0 {
+						mlen := len(rs)
+						if mlen > 510 {
+							mlen = 510
+						}
+						println("APPEND", len(rs[:mlen]))
+						_, err := oleutil.CallMethod(param, "AppendChunk", string(rs[:mlen-1]))
+						if err != nil {
+							return err
+						}
+						rs = rs[mlen:]
+					}
+				} else {
+					_, err = oleutil.PutProperty(param, "Value", vv)
+					if err != nil {
+						return err
+					}
+				}
+			default:
+				_, err = oleutil.PutProperty(param, "Value", vv)
+				if err != nil {
+					return err
+				}
 			}
 			_, err = oleutil.CallMethod(s.ps, "Append", param)
 			if err != nil {
@@ -181,9 +207,33 @@ func (s *AdodbStmt) bind(args []driver.Value) error {
 			}
 			item := val.ToIDispatch()
 			defer item.Release()
-			_, err = oleutil.PutProperty(item, "Value", v)
-			if err != nil {
-				return err
+			switch vv := v.(type) {
+			case string:
+				rs := []rune(vv)
+				if len(rs) > 511 {
+					for len(rs) > 0 {
+						mlen := len(rs)
+						if mlen > 511 {
+							mlen = 511
+						}
+						s := string(rs[:mlen])
+						_, err := oleutil.CallMethod(item, "AppendChunk", s)
+						if err != nil {
+							return err
+						}
+						rs = rs[mlen:]
+					}
+				} else {
+					_, err = oleutil.PutProperty(item, "Value", vv)
+					if err != nil {
+						return err
+					}
+				}
+			default:
+				_, err = oleutil.PutProperty(item, "Value", vv)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
