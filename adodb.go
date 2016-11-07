@@ -214,16 +214,19 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 		}
 	} else {
 		for i, v := range args {
-			var varval ole.VARIANT
-			varval.VT = ole.VT_I4
-			varval.Val = int64(i)
-			val, err := oleutil.CallMethod(s.ps, "Item", &varval)
+			var err error
+			var val *ole.VARIANT
+			if v.Name != "" {
+				val, err = oleutil.CallMethod(s.ps, "Item", v.Name)
+			} else {
+				val, err = oleutil.CallMethod(s.ps, "Item", int32(i))
+			}
 			if err != nil {
 				return err
 			}
 			item := val.ToIDispatch()
 			defer item.Release()
-			_, err = oleutil.PutProperty(item, "Value", v)
+			_, err = oleutil.PutProperty(item, "Value", v.Value)
 			if err != nil {
 				return err
 			}
