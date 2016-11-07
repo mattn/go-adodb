@@ -3,13 +3,15 @@ package adodb
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/go-ole/go-ole"
-	"github.com/go-ole/go-ole/oleutil"
 	"io"
 	"math"
 	"math/big"
 	"time"
 	"unsafe"
+
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -43,12 +45,48 @@ func (tx *AdodbTx) Rollback() error {
 	return nil
 }
 
-func (c *AdodbConn) exec(cmd string) error {
-	_, err := oleutil.CallMethod(c.db, "Execute", cmd)
-	return err
+func (c *AdodbConn) exec(ctx context.Context, query string, args []namedValue) (driver.Result, error) {
+	s, err := c.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.(*AdodbStmt).exec(ctx, args)
+	s.Close()
+	if err != nil && err != driver.ErrSkip {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *AdodbConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return c.query(context.Background(), query, list)
+}
+
+func (c *AdodbConn) query(ctx context.Context, query string, args []namedValue) (driver.Rows, error) {
+	s, err := c.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.(*AdodbStmt).query(ctx, args)
+	if err != nil && err != driver.ErrSkip {
+		s.Close()
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (c *AdodbConn) Begin() (driver.Tx, error) {
+	return c.begin(context.Background())
+}
+
+func (c *AdodbConn) begin(ctx context.Context) (driver.Tx, error) {
 	_, err := oleutil.CallMethod(c.db, "BeginTrans")
 	if err != nil {
 		return nil, err
@@ -91,6 +129,10 @@ type AdodbStmt struct {
 }
 
 func (c *AdodbConn) Prepare(query string) (driver.Stmt, error) {
+	return c.prepare(context.Background(), query)
+}
+
+func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, error) {
 	unknown, err := oleutil.CreateObject("ADODB.Command")
 	if err != nil {
 		return nil, err
@@ -148,7 +190,7 @@ func (s *AdodbStmt) NumInput() int {
 	return c
 }
 
-func (s *AdodbStmt) bind(args []driver.Value) error {
+func (s *AdodbStmt) bind(args []namedValue) error {
 	if s.b != nil {
 		for i, v := range args {
 			var b string = "?"
@@ -161,7 +203,7 @@ func (s *AdodbStmt) bind(args []driver.Value) error {
 			}
 			param := unknown.ToIDispatch()
 			defer param.Release()
-			_, err = oleutil.PutProperty(param, "Value", v)
+			_, err = oleutil.PutProperty(param, "Value", v.Value)
 			if err != nil {
 				return err
 			}
@@ -190,7 +232,24 @@ func (s *AdodbStmt) bind(args []driver.Value) error {
 	return nil
 }
 
+type namedValue struct {
+	Name    string
+	Ordinal int
+	Value   driver.Value
+}
+
 func (s *AdodbStmt) Query(args []driver.Value) (driver.Rows, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return s.query(context.Background(), list)
+}
+
+func (s *AdodbStmt) query(ctx context.Context, args []namedValue) (driver.Rows, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
@@ -202,6 +261,17 @@ func (s *AdodbStmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s *AdodbStmt) Exec(args []driver.Value) (driver.Result, error) {
+	list := make([]namedValue, len(args))
+	for i, v := range args {
+		list[i] = namedValue{
+			Ordinal: i + 1,
+			Value:   v,
+		}
+	}
+	return s.exec(context.Background(), list)
+}
+
+func (s *AdodbStmt) exec(ctx context.Context, args []namedValue) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
