@@ -37,7 +37,7 @@ func (c *AdodbConn) PrepareContext(ctx context.Context, query string) (driver.St
 	return c.prepare(ctx, query)
 }
 
-func (c *AdodbConn) BeginContext(ctx context.Context) (driver.Tx, error) {
+func (c *AdodbConn) BeginTx(ctx context.Context) (driver.Tx, error) {
 	return c.begin(ctx)
 }
 
