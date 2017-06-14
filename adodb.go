@@ -30,18 +30,20 @@ type AdodbTx struct {
 }
 
 func (tx *AdodbTx) Commit() error {
-	_, err := oleutil.CallMethod(tx.c.db, "CommitTrans")
+	rv, err := oleutil.CallMethod(tx.c.db, "CommitTrans")
 	if err != nil {
 		return err
 	}
+	rv.Clear()
 	return nil
 }
 
 func (tx *AdodbTx) Rollback() error {
-	_, err := oleutil.CallMethod(tx.c.db, "Rollback")
+	rv, err := oleutil.CallMethod(tx.c.db, "Rollback")
 	if err != nil {
 		return err
 	}
+	rv.Clear()
 	return nil
 }
 
@@ -58,6 +60,7 @@ func (c *AdodbConn) exec(ctx context.Context, query string, args []namedValue) (
 	return result, nil
 }
 
+/*
 func (c *AdodbConn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, v := range args {
@@ -81,43 +84,47 @@ func (c *AdodbConn) query(ctx context.Context, query string, args []namedValue) 
 	}
 	return rows, nil
 }
+*/
 
 func (c *AdodbConn) Begin() (driver.Tx, error) {
 	return c.begin(context.Background())
 }
 
 func (c *AdodbConn) begin(ctx context.Context) (driver.Tx, error) {
-	_, err := oleutil.CallMethod(c.db, "BeginTrans")
+	rv, err := oleutil.CallMethod(c.db, "BeginTrans")
 	if err != nil {
 		return nil, err
 	}
+	rv.Clear()
 	return &AdodbTx{c}, nil
 }
 
 func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
-	ole.CoInitialize(0)
 	unknown, err := oleutil.CreateObject("ADODB.Connection")
 	if err != nil {
 		return nil, err
 	}
+	defer unknown.Release()
 	db, err := unknown.QueryInterface(ole.IID_IDispatch)
 	if err != nil {
 		return nil, err
 	}
-	_, err = oleutil.CallMethod(db, "Open", dsn)
+	rc, err := oleutil.CallMethod(db, "Open", dsn)
 	if err != nil {
 		return nil, err
 	}
+	rc.Clear()
 	return &AdodbConn{db}, nil
 }
 
 func (c *AdodbConn) Close() error {
-	_, err := oleutil.CallMethod(c.db, "Close")
+	rv, err := oleutil.CallMethod(c.db, "Close")
 	if err != nil {
 		return err
 	}
+	rv.Clear()
+	c.db.Release()
 	c.db = nil
-	ole.CoUninitialize()
 	return nil
 }
 
@@ -141,26 +148,31 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 	if err != nil {
 		return nil, err
 	}
-	_, err = oleutil.PutProperty(s, "ActiveConnection", c.db)
+	rv, err := oleutil.PutProperty(s, "ActiveConnection", c.db)
 	if err != nil {
 		return nil, err
 	}
-	_, err = oleutil.PutProperty(s, "CommandText", query)
+	rv.Clear()
+	rv, err = oleutil.PutProperty(s, "CommandText", query)
 	if err != nil {
 		return nil, err
 	}
-	_, err = oleutil.PutProperty(s, "CommandType", 1)
+	rv.Clear()
+	rv, err = oleutil.PutProperty(s, "CommandType", 1)
 	if err != nil {
 		return nil, err
 	}
-	_, err = oleutil.PutProperty(s, "Prepared", true)
+	rv.Clear()
+	rv, err = oleutil.PutProperty(s, "Prepared", true)
 	if err != nil {
 		return nil, err
 	}
+	rv.Clear()
 	val, err := oleutil.GetProperty(s, "Parameters")
 	if err != nil {
 		return nil, err
 	}
+	defer val.Clear()
 	return &AdodbStmt{c, s, val.ToIDispatch(), nil}, nil
 }
 
@@ -170,7 +182,16 @@ func (s *AdodbStmt) Bind(bind []string) error {
 }
 
 func (s *AdodbStmt) Close() error {
+	rv, err := oleutil.PutProperty(s.s, "ActiveConnection", nil)
+	if err != nil {
+		return err
+	}
+	rv.Clear()
+	s.ps.Release()
+	s.ps = nil
 	s.s.Release()
+	s.s = nil
+	s.c = nil
 	return nil
 }
 
@@ -178,16 +199,17 @@ func (s *AdodbStmt) NumInput() int {
 	if s.b != nil {
 		return len(s.b)
 	}
-	_, err := oleutil.CallMethod(s.ps, "Refresh")
+	rv, err := oleutil.CallMethod(s.ps, "Refresh")
 	if err != nil {
 		return -1
 	}
-	val, err := oleutil.GetProperty(s.ps, "Count")
+	rv.Clear()
+	rv, err = oleutil.GetProperty(s.ps, "Count")
 	if err != nil {
 		return -1
 	}
-	c := int(val.Val)
-	return c
+	defer rv.Clear()
+	return int(rv.Val)
 }
 
 func (s *AdodbStmt) bind(args []namedValue) error {
@@ -202,15 +224,23 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 				return err
 			}
 			param := unknown.ToIDispatch()
-			defer param.Release()
-			_, err = oleutil.PutProperty(param, "Value", v.Value)
+			unknown.Clear()
+			rv, err := oleutil.PutProperty(param, "Value", v.Value)
 			if err != nil {
+				param.Release()
+				unknown.Clear()
 				return err
 			}
-			_, err = oleutil.CallMethod(s.ps, "Append", param)
+			rv.Clear()
+			rv, err = oleutil.CallMethod(s.ps, "Append", param)
 			if err != nil {
+				param.Release()
+				unknown.Clear()
 				return err
 			}
+			rv.Clear()
+			param.Release()
+			param.Release()
 		}
 	} else {
 		for i, v := range args {
@@ -225,11 +255,14 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 				return err
 			}
 			item := val.ToIDispatch()
-			defer item.Release()
-			_, err = oleutil.PutProperty(item, "Value", v.Value)
+			val.Clear()
+			rv, err := oleutil.PutProperty(item, "Value", v.Value)
 			if err != nil {
+				item.Release()
 				return err
 			}
+			rv.Clear()
+			item.Release()
 		}
 	}
 	return nil
@@ -293,10 +326,14 @@ type AdodbRows struct {
 }
 
 func (rc *AdodbRows) Close() error {
-	_, err := oleutil.CallMethod(rc.rc, "Close")
+	rv, err := oleutil.CallMethod(rc.rc, "Close")
 	if err != nil {
 		return err
 	}
+	rv.Clear()
+	rc.rc.Release()
+	rc.rc = nil
+	rc.s = nil
 	return nil
 }
 
@@ -307,12 +344,14 @@ func (rc *AdodbRows) Columns() []string {
 			return []string{}
 		}
 		fields := unknown.ToIDispatch()
+		unknown.Clear()
 		defer fields.Release()
-		val, err := oleutil.GetProperty(fields, "Count")
+		rv, err := oleutil.GetProperty(fields, "Count")
 		if err != nil {
 			return []string{}
 		}
-		rc.nc = int(val.Val)
+		rc.nc = int(rv.Val)
+		rv.Clear()
 		rc.cols = make([]string, rc.nc)
 		for i := 0; i < rc.nc; i++ {
 			var varval ole.VARIANT
@@ -323,14 +362,14 @@ func (rc *AdodbRows) Columns() []string {
 				return []string{}
 			}
 			item := val.ToIDispatch()
-			if err != nil {
-				return []string{}
-			}
+			val.Clear()
 			name, err := oleutil.GetProperty(item, "Name")
 			if err != nil {
+				item.Release()
 				return []string{}
 			}
 			rc.cols[i] = name.ToString()
+			name.Clear()
 			item.Release()
 		}
 	}
@@ -338,42 +377,56 @@ func (rc *AdodbRows) Columns() []string {
 }
 
 func (rc *AdodbRows) Next(dest []driver.Value) error {
-	unknown, err := oleutil.GetProperty(rc.rc, "EOF")
+	eof, err := oleutil.GetProperty(rc.rc, "EOF")
 	if err != nil {
 		return io.EOF
 	}
-	if unknown.Val != 0 {
+	if eof.Val != 0 {
+		eof.Clear()
 		return io.EOF
 	}
-	unknown, err = oleutil.GetProperty(rc.rc, "Fields")
+	eof.Clear()
+
+	unknown, err := oleutil.GetProperty(rc.rc, "Fields")
 	if err != nil {
 		return err
 	}
 	fields := unknown.ToIDispatch()
+	unknown.Clear()
 	defer fields.Release()
 	for i := range dest {
 		var varval ole.VARIANT
 		varval.VT = ole.VT_I4
 		varval.Val = int64(i)
-		val, err := oleutil.CallMethod(fields, "Item", &varval)
+		rv, err := oleutil.CallMethod(fields, "Item", &varval)
 		if err != nil {
 			return err
 		}
-		field := val.ToIDispatch()
-		defer field.Release()
+		field := rv.ToIDispatch()
+		rv.Clear()
+		val, err := oleutil.GetProperty(field, "Value")
+		if err != nil {
+			field.Release()
+			return err
+		}
+		if val.VT == 1 /* VT_NULL */ {
+			dest[i] = nil
+			val.Clear()
+			field.Release()
+			continue
+		}
 		typ, err := oleutil.GetProperty(field, "Type")
 		if err != nil {
-			return err
-		}
-		val, err = oleutil.GetProperty(field, "Value")
-		if err != nil {
+			val.Clear()
+			field.Release()
 			return err
 		}
 		sc, err := oleutil.GetProperty(field, "NumericScale")
-		field.Release()
-		if val.VT == 1 /* VT_NULL */ {
-			dest[i] = nil
-			continue
+		if err != nil {
+			typ.Clear()
+			val.Clear()
+			field.Release()
+			return err
 		}
 		switch typ.Val {
 		case 0: // ADEMPTY
@@ -471,10 +524,15 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			}
 			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
 		}
+		typ.Clear()
+		sc.Clear()
+		val.Clear()
+		field.Release()
 	}
-	_, err = oleutil.CallMethod(rc.rc, "MoveNext")
+	rv, err := oleutil.CallMethod(rc.rc, "MoveNext")
 	if err != nil {
 		return err
 	}
+	rv.Clear()
 	return nil
 }
