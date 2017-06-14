@@ -17,6 +17,7 @@ func (c *AdodbConn) Ping(ctx context.Context) error {
 	return nil
 }
 
+/*
 func (c *AdodbConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	list := make([]namedValue, len(args))
 	for i, nv := range args {
@@ -32,6 +33,7 @@ func (c *AdodbConn) ExecContext(ctx context.Context, query string, args []driver
 	}
 	return c.exec(ctx, query, list)
 }
+*/
 
 func (c *AdodbConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	return c.prepare(ctx, query)
