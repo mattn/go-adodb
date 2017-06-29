@@ -100,6 +100,8 @@ func (c *AdodbConn) begin(ctx context.Context) (driver.Tx, error) {
 }
 
 func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
+	ole.CoInitialize(0)
+
 	unknown, err := oleutil.CreateObject("ADODB.Connection")
 	if err != nil {
 		return nil, err
@@ -125,6 +127,7 @@ func (c *AdodbConn) Close() error {
 	rv.Clear()
 	c.db.Release()
 	c.db = nil
+	ole.CoUninitialize()
 	return nil
 }
 
