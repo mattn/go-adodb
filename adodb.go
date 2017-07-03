@@ -821,3 +821,56 @@ func (rc *AdodbRows) ColumnTypeScanType(i int) reflect.Type {
 	item.Release()
 	return rt
 }
+
+func (rc *AdodbRows) ColumnTypePrecisionScale(i int) (precision, scale int64, ok bool) {
+	if i >= rc.nc {
+		return 0, 0, false
+	}
+	unknown, err := oleutil.GetProperty(rc.rc, "Fields")
+	if err != nil {
+		return 0, 0, false
+	}
+	fields := unknown.ToIDispatch()
+	unknown.Clear()
+	defer fields.Release()
+
+	var varval ole.VARIANT
+	varval.VT = ole.VT_I4
+	varval.Val = int64(i)
+	val, err := oleutil.CallMethod(fields, "Item", &varval)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	item := val.ToIDispatch()
+	val.Clear()
+
+	typ, err := oleutil.GetProperty(item, "Type")
+	if err != nil {
+		item.Release()
+		return 0, 0, false
+	}
+	if typ.Val != 131 {
+		item.Release()
+		return 0, 0, true
+	}
+
+	prec, err := oleutil.GetProperty(item, "Precision")
+	if err != nil {
+		item.Release()
+		return 0, 0, false
+	}
+
+	scl, err := oleutil.GetProperty(item, "NumericScale")
+	if err != nil {
+		item.Release()
+		return 0, 0, false
+	}
+
+	precval := prec.Val
+	sclval := scl.Val
+	prec.Clear()
+	scl.Clear()
+	item.Release()
+	return int64(precval), sclval, true
+}
