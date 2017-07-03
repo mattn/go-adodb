@@ -872,5 +872,5 @@ func (rc *AdodbRows) ColumnTypePrecisionScale(i int) (precision, scale int64, ok
 	prec.Clear()
 	scl.Clear()
 	item.Release()
-	return int64(precval), sclval, true
+	return int64(precval), int64(sclval), true
 }
