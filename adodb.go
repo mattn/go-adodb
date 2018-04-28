@@ -528,9 +528,11 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			}
 			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
 		}
+		if typ.Val != 12 {
+			val.Clear()
+		}
 		typ.Clear()
 		sc.Clear()
-		val.Clear()
 		field.Release()
 	}
 	rv, err := oleutil.CallMethod(rc.rc, "MoveNext")
