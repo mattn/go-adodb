@@ -71,7 +71,7 @@ func main() {
 	}
 	defer stmt.Close()
 
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 1000; i++ {
 		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i), time.Now())
 		if err != nil {
 			fmt.Println("exec", err)
