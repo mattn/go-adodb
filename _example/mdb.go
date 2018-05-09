@@ -11,6 +11,8 @@ import (
 	_ "github.com/mattn/go-adodb"
 )
 
+var provider string
+
 func createMdb(f string) error {
 	unk, err := oleutil.CreateObject("ADOX.Catalog")
 	if err != nil {
@@ -20,9 +22,14 @@ func createMdb(f string) error {
 	if err != nil {
 		return err
 	}
-	_, err = oleutil.CallMethod(cat, "Create", "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+f+";")
+	provider = "Microsoft.Jet.OLEDB.4.0"
+	_, err = oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
 	if err != nil {
-		return err
+		provider = "Microsoft.ACE.OLEDB.12.0"
+		_, err = oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -40,7 +47,7 @@ func main() {
 		return
 	}
 
-	db, err := sql.Open("adodb", "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+f+";")
+	db, err := sql.Open("adodb", "Provider="+provider+";Data Source="+f+";")
 	if err != nil {
 		fmt.Println("open", err)
 		return
@@ -64,7 +71,7 @@ func main() {
 	}
 	defer stmt.Close()
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 100000; i++ {
 		_, err = stmt.Exec(i, fmt.Sprintf("こんにちわ世界%03d", i), time.Now())
 		if err != nil {
 			fmt.Println("exec", err)
