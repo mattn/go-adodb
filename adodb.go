@@ -3,6 +3,7 @@ package adodb
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"io"
 	"math"
 	"math/big"
@@ -136,7 +137,7 @@ type AdodbStmt struct {
 	c  *AdodbConn
 	s  *ole.IDispatch
 	ps *ole.IDispatch
-	b  []string
+	pc int
 }
 
 func (c *AdodbConn) Prepare(query string) (driver.Stmt, error) {
@@ -177,12 +178,14 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 		return nil, err
 	}
 	defer val.Clear()
-	return &AdodbStmt{c, s, val.ToIDispatch(), nil}, nil
-}
+	ps := val.ToIDispatch()
 
-func (s *AdodbStmt) Bind(bind []string) error {
-	s.b = bind
-	return nil
+	rv, err = oleutil.CallMethod(ps, "Refresh")
+	if err != nil {
+		return nil, err
+	}
+	rv.Clear()
+	return &AdodbStmt{c: c, s: s, ps: ps, pc: -1}, nil
 }
 
 func (s *AdodbStmt) Close() error {
@@ -200,74 +203,39 @@ func (s *AdodbStmt) Close() error {
 }
 
 func (s *AdodbStmt) NumInput() int {
-	if s.b != nil {
-		return len(s.b)
+	if s.pc != -1 {
+		return s.pc
 	}
-	rv, err := oleutil.CallMethod(s.ps, "Refresh")
-	if err != nil {
-		return -1
-	}
-	rv.Clear()
-	rv, err = oleutil.GetProperty(s.ps, "Count")
+	rv, err := oleutil.GetProperty(s.ps, "Count")
 	if err != nil {
 		return -1
 	}
 	defer rv.Clear()
-	return int(rv.Val)
+	s.pc = int(rv.Val)
+	return s.pc
 }
 
 func (s *AdodbStmt) bind(args []namedValue) error {
-	if s.b != nil {
-		for i, v := range args {
-			var b string = "?"
-			if len(s.b) < i {
-				b = s.b[i]
-			}
-			unknown, err := oleutil.CallMethod(s.s, "CreateParameter", b, 12, 1)
-			if err != nil {
-				return err
-			}
-			param := unknown.ToIDispatch()
-			unknown.Clear()
-			rv, err := oleutil.PutProperty(param, "Value", v.Value)
-			if err != nil {
-				param.Release()
-				unknown.Clear()
-				return err
-			}
-			rv.Clear()
-			rv, err = oleutil.CallMethod(s.ps, "Append", param)
-			if err != nil {
-				param.Release()
-				unknown.Clear()
-				return err
-			}
-			rv.Clear()
-			param.Release()
-			param.Release()
+	for i, v := range args {
+		var err error
+		var val *ole.VARIANT
+		if v.Name != "" {
+			val, err = oleutil.CallMethod(s.ps, "Item", v.Name)
+		} else {
+			val, err = oleutil.CallMethod(s.ps, "Item", int32(i))
 		}
-	} else {
-		for i, v := range args {
-			var err error
-			var val *ole.VARIANT
-			if v.Name != "" {
-				val, err = oleutil.CallMethod(s.ps, "Item", v.Name)
-			} else {
-				val, err = oleutil.CallMethod(s.ps, "Item", int32(i))
-			}
-			if err != nil {
-				return err
-			}
-			item := val.ToIDispatch()
-			val.Clear()
-			rv, err := oleutil.PutProperty(item, "Value", v.Value)
-			if err != nil {
-				item.Release()
-				return err
-			}
-			rv.Clear()
+		if err != nil {
+			return err
+		}
+		item := val.ToIDispatch()
+		val.Clear()
+		rv, err := oleutil.PutProperty(item, "Value", v.Value)
+		if err != nil {
 			item.Release()
+			return err
 		}
+		rv.Clear()
+		item.Release()
 	}
 	return nil
 }
@@ -311,15 +279,30 @@ func (s *AdodbStmt) Exec(args []driver.Value) (driver.Result, error) {
 	return s.exec(context.Background(), list)
 }
 
+type AdodbResult struct {
+	n int64
+}
+
+func (r *AdodbResult) LastInsertId() (int64, error) {
+	return 0, errors.New("LastInsertId not supported")
+}
+
+func (r *AdodbResult) RowsAffected() (int64, error) {
+	return r.n, nil
+}
+
 func (s *AdodbStmt) exec(ctx context.Context, args []namedValue) (driver.Result, error) {
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	_, err := oleutil.CallMethod(s.s, "Execute")
+	var rowsAffected int64
+	rc, err := oleutil.CallMethod(s.s, "Execute", &rowsAffected)
 	if err != nil {
 		return nil, err
 	}
-	return driver.ResultNoRows, nil
+	rc.Clear()
+
+	return &AdodbResult{n: rowsAffected}, nil
 }
 
 type AdodbRows struct {
