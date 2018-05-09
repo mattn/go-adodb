@@ -229,12 +229,21 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 		}
 		item := val.ToIDispatch()
 		val.Clear()
-		rv, err := oleutil.PutProperty(item, "Value", v.Value)
-		if err != nil {
-			item.Release()
-			return err
+		t, err := oleutil.GetProperty(item, "Type")
+		if t.Val == 202 {
+			_, err = oleutil.CallMethod(item, "AppendChunk", v.Value)
+			if err != nil {
+				return err
+			}
+		} else {
+			rv, err := oleutil.PutProperty(item, "Value", v.Value)
+			if err != nil {
+				item.Release()
+				return err
+			}
+			rv.Clear()
 		}
-		rv.Clear()
+		t.Clear()
 		item.Release()
 	}
 	return nil
