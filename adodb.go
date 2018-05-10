@@ -98,7 +98,7 @@ func (c *AdodbConn) begin(ctx context.Context) (driver.Tx, error) {
 		return nil, err
 	}
 	rv.Clear()
-	return &AdodbTx{c}, nil
+	return &AdodbTx{c: c}, nil
 }
 
 func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
@@ -108,8 +108,8 @@ func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unknown.Release()
 	db, err := unknown.QueryInterface(ole.IID_IDispatch)
+	unknown.Release()
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
 		return nil, err
 	}
 	rc.Clear()
-	return &AdodbConn{db}, nil
+	return &AdodbConn{db: db}, nil
 }
 
 func (c *AdodbConn) Close() error {
@@ -150,6 +150,7 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 		return nil, err
 	}
 	s, err := unknown.QueryInterface(ole.IID_IDispatch)
+	unknown.Release()
 	if err != nil {
 		return nil, err
 	}
@@ -177,8 +178,8 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 	if err != nil {
 		return nil, err
 	}
-	defer val.Clear()
 	ps := val.ToIDispatch()
+	val.Clear()
 
 	rv, err = oleutil.CallMethod(ps, "Refresh")
 	if err != nil {
@@ -189,11 +190,6 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 }
 
 func (s *AdodbStmt) Close() error {
-	rv, err := oleutil.PutProperty(s.s, "ActiveConnection", nil)
-	if err != nil {
-		return err
-	}
-	rv.Clear()
 	s.ps.Release()
 	s.ps = nil
 	s.s.Release()
@@ -210,8 +206,8 @@ func (s *AdodbStmt) NumInput() int {
 	if err != nil {
 		return -1
 	}
-	defer rv.Clear()
 	s.pc = int(rv.Val)
+	rv.Clear()
 	return s.pc
 }
 
@@ -230,8 +226,12 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 		item := val.ToIDispatch()
 		val.Clear()
 		t, err := oleutil.GetProperty(item, "Type")
+		if err != nil {
+			item.Release()
+		}
 		rv, err := oleutil.PutProperty(item, "Value", v.Value)
 		if err != nil {
+			t.Clear()
 			item.Release()
 			return err
 		}
@@ -263,11 +263,14 @@ func (s *AdodbStmt) query(ctx context.Context, args []namedValue) (driver.Rows, 
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
-	rc, err := oleutil.CallMethod(s.s, "Execute")
+	res, err := oleutil.CallMethod(s.s, "Execute")
 	if err != nil {
 		return nil, err
 	}
-	return &AdodbRows{s, rc.ToIDispatch(), -1, nil}, nil
+	rc := res.ToIDispatch()
+	rc.AddRef()
+	res.Clear()
+	return &AdodbRows{s: s, rc: rc, nc: -1, cols: nil}, nil
 }
 
 func (s *AdodbStmt) Exec(args []driver.Value) (driver.Result, error) {
