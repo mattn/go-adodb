@@ -16,6 +16,15 @@ import (
 	"golang.org/x/net/context"
 )
 
+type releaser interface {
+	Release() int32
+}
+
+func fullRelease(obj releaser) {
+	for obj.Release() > 0 {
+	}
+}
+
 func init() {
 	sql.Register("adodb", &AdodbDriver{})
 }
@@ -127,8 +136,7 @@ func (c *AdodbConn) Close() error {
 		return err
 	}
 	rv.Clear()
-	for c.db.Release() > 0 {
-	}
+	fullRelease(c.db)
 	c.db = nil
 	ole.CoUninitialize()
 	return nil
@@ -191,11 +199,9 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 }
 
 func (s *AdodbStmt) Close() error {
-	for s.ps.Release() > 0 {
-	}
+	fullRelease(s.ps)
 	s.ps = nil
-	for s.s.Release() > 0 {
-	}
+	fullRelease(s.s)
 	s.s = nil
 	s.c = nil
 	return nil
@@ -231,6 +237,7 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 		t, err := oleutil.GetProperty(item, "Type")
 		if err != nil {
 			item.Release()
+			return err
 		}
 		rv, err := oleutil.PutProperty(item, "Value", v.Value)
 		if err != nil {
@@ -326,8 +333,7 @@ func (rc *AdodbRows) Close() error {
 		return err
 	}
 	rv.Clear()
-	for rc.rc.Release() > 0 {
-	}
+	fullRelease(rc.rc)
 	rc.rc = nil
 	rc.s = nil
 	return nil
