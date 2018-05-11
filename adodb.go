@@ -21,7 +21,13 @@ type releaser interface {
 }
 
 func fullRelease(obj releaser) {
-	for obj.Release() > 0 {
+	last := int32(-1)
+	for {
+		ref := obj.Release()
+		if ref == 0 || ref == last {
+			break
+		}
+		last = ref
 	}
 }
 
