@@ -323,7 +323,9 @@ func (rc *AdodbRows) Close() error {
 		return err
 	}
 	rv.Clear()
-	rc.rc.Release()
+	if rc.rc.Release() > 0 {
+		rc.rc.Release()
+	}
 	rc.rc = nil
 	rc.s = nil
 	return nil
@@ -383,7 +385,6 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 	if err != nil {
 		return err
 	}
-	defer rc.rc.Release()
 	fields := unknown.ToIDispatch()
 	unknown.Clear()
 	defer fields.Release()
