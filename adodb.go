@@ -383,6 +383,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 	if err != nil {
 		return err
 	}
+	defer rc.rc.Release()
 	fields := unknown.ToIDispatch()
 	unknown.Clear()
 	defer fields.Release()
@@ -401,7 +402,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			field.Release()
 			return err
 		}
-		if val.VT == 1 /* VT_NULL */ {
+		if val.VT == 1 { // VT_NULL
 			dest[i] = nil
 			val.Clear()
 			field.Release()
