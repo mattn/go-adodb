@@ -127,7 +127,8 @@ func (c *AdodbConn) Close() error {
 		return err
 	}
 	rv.Clear()
-	c.db.Release()
+	for c.db.Release() > 0 {
+	}
 	c.db = nil
 	ole.CoUninitialize()
 	return nil
@@ -190,9 +191,11 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 }
 
 func (s *AdodbStmt) Close() error {
-	s.ps.Release()
+	for s.ps.Release() > 0 {
+	}
 	s.ps = nil
-	s.s.Release()
+	for s.s.Release() > 0 {
+	}
 	s.s = nil
 	s.c = nil
 	return nil
@@ -323,8 +326,7 @@ func (rc *AdodbRows) Close() error {
 		return err
 	}
 	rv.Clear()
-	if rc.rc.Release() > 0 {
-		rc.rc.Release()
+	for rc.rc.Release() > 0 {
 	}
 	rc.rc = nil
 	rc.s = nil
