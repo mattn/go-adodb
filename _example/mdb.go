@@ -18,19 +18,22 @@ func createMdb(f string) error {
 	if err != nil {
 		return err
 	}
+	defer unk.Release()
 	cat, err := unk.QueryInterface(ole.IID_IDispatch)
 	if err != nil {
 		return err
 	}
+	defer cat.Release()
 	provider = "Microsoft.Jet.OLEDB.4.0"
-	_, err = oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
+	r, err := oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
 	if err != nil {
 		provider = "Microsoft.ACE.OLEDB.12.0"
-		_, err = oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
+		r, err = oleutil.CallMethod(cat, "Create", "Provider="+provider+";Data Source="+f+";")
 		if err != nil {
 			return err
 		}
 	}
+	r.Clear()
 	return nil
 }
 
@@ -52,6 +55,7 @@ func main() {
 		fmt.Println("open", err)
 		return
 	}
+	defer db.Close()
 
 	_, err = db.Exec("create table foo (id int not null primary key, name text not null, created datetime not null)")
 	if err != nil {
