@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 	"math"
-	"math/big"
+	//"math/big"
 	"reflect"
 	"time"
 	"unsafe"
@@ -478,9 +478,10 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 19: // ADUNSIGNEDINT
 			dest[i] = uint32(val.Val)
 		case 20: // ADBIGINT
-			dest[i] = big.NewInt(val.Val)
+			//dest[i] = big.NewInt(val.Val)
+			dest[i] = int64(val.Val)
 		case 21: // ADUNSIGNEDBIGINT
-			// TODO
+			dest[i] = uint64(val.Val)
 		case 72: // ADGUID
 			dest[i] = val.ToString()
 		case 128: // ADBINARY
@@ -786,9 +787,11 @@ func (rc *AdodbRows) ColumnTypeScanType(i int) reflect.Type {
 	case 19: // ADUNSIGNEDINT
 		rt = reflect.TypeOf(uint32(0))
 	case 20: // ADBIGINT
-		rt = reflect.TypeOf((*big.Int)(nil))
+		//rt = reflect.TypeOf((*big.Int)(nil))
+		rt = reflect.TypeOf((int64)(0))
 	case 21: // ADUNSIGNEDBIGINT
-		rt = reflect.TypeOf(nil)
+		//rt = reflect.TypeOf(nil)
+		rt = reflect.TypeOf((uint64)(0))
 	case 72: // ADGUID
 		var gi ole.GUID
 		rt = reflect.TypeOf(gi)
