@@ -38,8 +38,6 @@ func createMdb(f string) error {
 }
 
 func main() {
-	ole.CoInitialize(0)
-
 	f := "./example.mdb"
 
 	os.Remove(f)
