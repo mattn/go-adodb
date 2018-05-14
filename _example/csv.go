@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"database/sql"
-	_ "github.com/mattn/go-adodb"
+	"fmt"
 	"os"
+
+	_ "github.com/mattn/go-adodb"
 )
 
 func main() {
@@ -15,6 +16,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	defer db.Close()
 
 	_, err = db.Exec("create table example.csv(f1 text, f2 text, f3 text)")
 	if err != nil {
