@@ -29,8 +29,8 @@ environment:
 install:
   - choco install mingw
   - SET PATH=c:\tools\mingw64\bin;%PATH%
-  - curl -fsS -o AccessDatabaseEngine_X64.exe %DOWNLOAD_URL%
-  - cmd /c start /wait AccessDatabaseEngine_X64.exe /passive
+  #- curl -fsS -o AccessDatabaseEngine_X64.exe %DOWNLOAD_URL%
+  #- cmd /c start /wait AccessDatabaseEngine_X64.exe /passive
   # - set
   - go version
   - go env
