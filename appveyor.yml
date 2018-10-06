@@ -18,6 +18,8 @@ clone_folder: c:\gopath\src\github.com\mattn\go-adodb
 
 environment:
   GOPATH: c:\gopath
+  DOWNLOAD_URL:
+    secure: https://www.dropbox.com/s/he4lvlzlodcr97g/AccessRuntime_x64_en-us.exe?dl=0
   matrix:
   - GOARCH: amd64
     GOVERSION: 1.11
@@ -27,8 +29,7 @@ environment:
 install:
   - choco install mingw
   - SET PATH=c:\tools\mingw64\bin;%PATH%
-  # - Download COM Server
-  - ps: Start-FileDownload "https://download.microsoft.com/download/2/4/3/24375141-E08D-4803-AB0E-10F2E3A07AAA/AccessDatabaseEngine_X64.exe --output AccessDatabaseEngine_X64.exe"
+  - curl -fsS -o AccessDatabaseEngine_X64.exe %DOWNLOAD_URL%
   - cmd /c start /wait AccessDatabaseEngine_X64.exe /passive
   # - set
   - go version
@@ -38,7 +39,7 @@ install:
   - go get -u golang.org/x/tools/cmd/stringer
 
 build_script:
-  - cd c:\gopath\src\github.com\go-ole\go-ole
+  - cd c:\gopath\src\github.com\mattn\go-adodb
   - go get -v -t ./...
   - go build
   - go test -v -cover ./...
