@@ -507,11 +507,13 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			dest[i] = time.Date(1899, 12, 30+int(d), 0, 0, 0, 0, time.Local)
 		case 134: // ADDBTIME
 			t := math.Float64frombits(uint64(val.Val))
-			dest[i] = time.Date(0, 1, 1, 0, 0, int(t*86400), 0, time.Local)
+			sec, nsec := math.Modf(t * 86400)
+			dest[i] = time.Date(0, 1, 1, 0, 0, int(sec), int(nsec*float64(time.Second)), time.Local)
 		case 135: // ADDBTIMESTAMP
 			d, t := math.Modf(math.Float64frombits(uint64(val.Val)))
 			t = math.Abs(t)
-			dest[i] = time.Date(1899, 12, 30+int(d), 0, 0, int(t*86400+0.5), 0, time.Local)
+			sec, nsec := math.Modf(t * 86400)
+			dest[i] = time.Date(1899, 12, 30+int(d), 0, 0, int(sec), int(nsec*float64(time.Second)), time.Local)
 		case 136: // ADCHAPTER
 			dest[i] = val.ToString()
 		case 200: // ADVARCHAR
