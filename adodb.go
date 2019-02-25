@@ -56,7 +56,7 @@ func (tx *AdodbTx) Commit() error {
 }
 
 func (tx *AdodbTx) Rollback() error {
-	rv, err := oleutil.CallMethod(tx.c.db, "Rollback")
+	rv, err := oleutil.CallMethod(tx.c.db, "RollbackTrans")
 	if err != nil {
 		return err
 	}
