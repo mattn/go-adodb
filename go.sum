@@ -1,0 +1,4 @@
+github.com/go-ole/go-ole v1.2.2 h1:HXmymm3IQ8iAfpqlbbUGLHd+SZrnmI4y1pv+WL/3R7c=
+github.com/go-ole/go-ole v1.2.2/go.mod h1:7FAglXiTm7HKlQRDeOQ6ZNUHidzCWXuZWq/1dTyBNF8=
+golang.org/x/net v0.0.0-20190225153610-fe579d43d832 h1:2IdId8zoI92l1bUzjAOygcAOkmCe13HY1j0rqPPPzB8=
+golang.org/x/net v0.0.0-20190225153610-fe579d43d832/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
