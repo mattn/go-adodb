@@ -196,11 +196,16 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 	ps := val.ToIDispatch()
 	val.Clear()
 
-	rv, err = oleutil.CallMethod(ps, "Refresh")
-	if err != nil {
-		return nil, err
+	_, err = oleutil.GetProperty(ps, "Count")
+	val.Clear()
+
+	if err == nil {
+		rv, err = oleutil.CallMethod(ps, "Refresh")
+		if err != nil {
+			return nil, err
+		}
+		rv.Clear()
 	}
-	rv.Clear()
 	return &AdodbStmt{c: c, s: s, ps: ps, pc: -1}, nil
 }
 
