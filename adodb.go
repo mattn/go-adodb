@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"math"
+
 	//"math/big"
 	"reflect"
 	"time"
@@ -196,17 +197,19 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 	ps := val.ToIDispatch()
 	val.Clear()
 
-	_, err = oleutil.GetProperty(ps, "Count")
-	val.Clear()
-
-	if err == nil {
+	pc := -1
+	rv, err = oleutil.GetProperty(ps, "Count")
+	if err != nil {
 		rv, err = oleutil.CallMethod(ps, "Refresh")
-		if err != nil {
-			return nil, err
+		if err == nil {
+			rv.Clear()
 		}
+	} else {
+		pc = int(rv.Val)
 		rv.Clear()
 	}
-	return &AdodbStmt{c: c, s: s, ps: ps, pc: -1}, nil
+
+	return &AdodbStmt{c: c, s: s, ps: ps, pc: pc}, nil
 }
 
 func (s *AdodbStmt) Close() error {
