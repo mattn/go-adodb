@@ -37,6 +37,8 @@ func init() {
 }
 
 type AdodbDriver struct {
+	CursorLocation int
+	ConnectTimeout int64
 }
 
 type AdodbConn struct {
@@ -129,6 +131,20 @@ func (d *AdodbDriver) Open(dsn string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if d.CursorLocation != 0 {
+		_, err = oleutil.PutProperty(db, "CursorLocation", d.CursorLocation)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d.ConnectTimeout != 0 {
+		_, err = oleutil.PutProperty(db, "ConnectTimeout", d.ConnectTimeout)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	rc, err := oleutil.CallMethod(db, "Open", dsn)
 	if err != nil {
 		return nil, err
