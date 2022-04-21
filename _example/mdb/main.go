@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
-	"github.com/mattn/go-adodb"
 	_ "github.com/mattn/go-adodb"
 )
 
@@ -39,10 +38,6 @@ func createMdb(f string) error {
 }
 
 func main() {
-	sql.Register("adodb_with_cursorlocation", &adodb.AdodbDriver{
-		CursorLocation: 3,
-	})
-
 	ole.CoInitialize(0)
 	defer ole.CoUninitialize()
 
@@ -56,7 +51,7 @@ func main() {
 		return
 	}
 
-	db, err := sql.Open("adodb_with_cursorlocation", "Provider="+provider+";Data Source="+f+";")
+	db, err := sql.Open("adodb", "Provider="+provider+";Data Source="+f+";")
 	if err != nil {
 		fmt.Println("open", err)
 		return
