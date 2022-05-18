@@ -1,0 +1,51 @@
+# Notes:
+#   - Minimal appveyor.yml file is an empty file. All sections are optional.
+#   - Indent each level of configuration with 2 spaces. Do not use tabs!
+#   - All section names are case-sensitive.
+#   - Section names should be unique on each level.
+
+version: "1.3.0.{build}-alpha-{branch}"
+
+os: Windows Server 2012 R2
+
+branches:
+  only:
+    - master
+
+skip_tags: true
+
+clone_folder: c:\gopath\src\github.com\mattn\go-adodb
+
+environment:
+  GOPATH: c:\gopath
+  DOWNLOAD_URL:
+    secure: https://www.dropbox.com/s/he4lvlzlodcr97g/AccessRuntime_x64_en-us.exe?dl=0
+  matrix:
+  - GOARCH: amd64
+    GOVERSION: 1.11
+    GOROOT: c:\go
+    DOWNLOADPLATFORM: "x64"
+
+install:
+  - choco install mingw
+  - SET PATH=c:\tools\mingw64\bin;%PATH%
+  #- curl -fsS -o AccessDatabaseEngine_X64.exe %DOWNLOAD_URL%
+  #- cmd /c start /wait AccessDatabaseEngine_X64.exe /passive
+  # - set
+  - go version
+  - go env
+  - go get -u golang.org/x/tools/cmd/cover
+  - go get -u golang.org/x/tools/cmd/godoc
+  - go get -u golang.org/x/tools/cmd/stringer
+
+build_script:
+  - cd c:\gopath\src\github.com\mattn\go-adodb
+  - go get -v -t ./...
+  - go build
+  - go test -v -cover ./...
+
+# disable automatic tests
+test: off
+
+# disable deployment
+deploy: off
