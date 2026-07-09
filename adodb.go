@@ -515,7 +515,9 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			if err != nil {
 				return err
 			}
-			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
+			b := make([]byte, elems)
+			copy(b, (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems:elems])
+			dest[i] = b
 		case 129: // ADCHAR
 			dest[i] = val.ToString() //uint8(val.Val)
 		case 130: // ADWCHAR
@@ -557,7 +559,9 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			if err != nil {
 				return err
 			}
-			dest[i] = (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems]
+			b := make([]byte, elems)
+			copy(b, (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems:elems])
+			dest[i] = b
 		}
 		if typ.Val != 12 {
 			val.Clear()
