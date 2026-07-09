@@ -510,7 +510,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			dest[i] = val.ToString()
 		case 128: // ADBINARY
 			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
-			conv := &ole.SafeArrayConversion{sa}
+			conv := &ole.SafeArrayConversion{Array: sa}
 			elems, err := conv.TotalElements(0)
 			if err != nil {
 				return err
@@ -552,7 +552,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			// TODO
 		case 205: // ADLONGVARBINARY
 			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
-			conv := &ole.SafeArrayConversion{sa}
+			conv := &ole.SafeArrayConversion{Array: sa}
 			elems, err := conv.TotalElements(0)
 			if err != nil {
 				return err
