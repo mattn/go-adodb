@@ -481,7 +481,10 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 8: // ADBSTR
 			dest[i] = val.ToString()
 		case 9: // ADIDISPATCH
-			dest[i] = val.ToIDispatch()
+			// A COM object cannot be represented as a driver.Value, and the
+			// underlying pointer is released by val.Clear() below, so returning
+			// it would hand database/sql a dangling pointer.
+			dest[i] = nil
 		case 10: // ADERROR
 			// TODO
 		case 11: // ADBOOLEAN
@@ -489,7 +492,8 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 12: // ADVARIANT
 			dest[i] = val
 		case 13: // ADIUNKNOWN
-			dest[i] = val.ToIUnknown()
+			// See ADIDISPATCH above: the pointer is released by val.Clear().
+			dest[i] = nil
 		case 14: // ADDECIMAL
 			sub := math.Pow(10, float64(sc.Val))
 			dest[i] = float64(float64(val.Val) / sub)
