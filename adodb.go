@@ -351,13 +351,77 @@ func (s *AdodbStmt) exec(ctx context.Context, args []namedValue) (driver.Result,
 }
 
 type AdodbRows struct {
-	s    *AdodbStmt
-	rc   *ole.IDispatch
-	nc   int
-	cols []string
+	s      *AdodbStmt
+	rc     *ole.IDispatch
+	nc     int
+	cols   []string
+	fields *ole.IDispatch
+	finfo  []fieldInfo
+}
+
+// fieldInfo caches the per-column state that does not change between rows: the
+// Field object itself and its Type and NumericScale. Only Value has to be read
+// for each row.
+type fieldInfo struct {
+	field *ole.IDispatch
+	typ   int64
+	scale int64
+}
+
+// prepareFields fetches and caches the Fields collection and the per-column
+// Field/Type/NumericScale on the first row. Re-reading these for every row
+// multiplied the per-cell COM traffic by four for no benefit, since they are
+// constant for the lifetime of the recordset.
+func (rc *AdodbRows) prepareFields(n int) error {
+	if rc.fields != nil {
+		return nil
+	}
+	unknown, err := oleutil.GetProperty(rc.rc, "Fields")
+	if err != nil {
+		return err
+	}
+	rc.fields = unknown.ToIDispatch()
+	rc.fields.AddRef()
+	unknown.Clear()
+
+	for i := 0; i < n; i++ {
+		var varval ole.VARIANT
+		varval.VT = ole.VT_I4
+		varval.Val = int64(i)
+		rv, err := oleutil.CallMethod(rc.fields, "Item", &varval)
+		if err != nil {
+			return err
+		}
+		field := rv.ToIDispatch()
+		field.AddRef()
+		rv.Clear()
+		typ, err := oleutil.GetProperty(field, "Type")
+		if err != nil {
+			field.Release()
+			return err
+		}
+		sc, err := oleutil.GetProperty(field, "NumericScale")
+		if err != nil {
+			typ.Clear()
+			field.Release()
+			return err
+		}
+		rc.finfo = append(rc.finfo, fieldInfo{field: field, typ: typ.Val, scale: sc.Val})
+		typ.Clear()
+		sc.Clear()
+	}
+	return nil
 }
 
 func (rc *AdodbRows) Close() error {
+	for i := range rc.finfo {
+		rc.finfo[i].field.Release()
+	}
+	rc.finfo = nil
+	if rc.fields != nil {
+		rc.fields.Release()
+		rc.fields = nil
+	}
 	rv, err := oleutil.CallMethod(rc.rc, "Close")
 	if err != nil {
 		return err
@@ -419,48 +483,21 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 	}
 	eof.Clear()
 
-	unknown, err := oleutil.GetProperty(rc.rc, "Fields")
-	if err != nil {
+	if err := rc.prepareFields(len(dest)); err != nil {
 		return err
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
-	defer fields.Release()
 	for i := range dest {
-		var varval ole.VARIANT
-		varval.VT = ole.VT_I4
-		varval.Val = int64(i)
-		rv, err := oleutil.CallMethod(fields, "Item", &varval)
+		fi := rc.finfo[i]
+		val, err := oleutil.GetProperty(fi.field, "Value")
 		if err != nil {
-			return err
-		}
-		field := rv.ToIDispatch()
-		rv.Clear()
-		val, err := oleutil.GetProperty(field, "Value")
-		if err != nil {
-			field.Release()
 			return err
 		}
 		if val.VT == 1 { // VT_NULL
 			dest[i] = nil
 			val.Clear()
-			field.Release()
 			continue
 		}
-		typ, err := oleutil.GetProperty(field, "Type")
-		if err != nil {
-			val.Clear()
-			field.Release()
-			return err
-		}
-		sc, err := oleutil.GetProperty(field, "NumericScale")
-		if err != nil {
-			typ.Clear()
-			val.Clear()
-			field.Release()
-			return err
-		}
-		switch typ.Val {
+		switch fi.typ {
 		case 0: // ADEMPTY
 			dest[i] = nil
 		case 2: // ADSMALLINT
@@ -495,7 +532,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			// See ADIDISPATCH above: the pointer is released by val.Clear().
 			dest[i] = nil
 		case 14: // ADDECIMAL
-			sub := math.Pow(10, float64(sc.Val))
+			sub := math.Pow(10, float64(fi.scale))
 			dest[i] = float64(float64(val.Val) / sub)
 		case 16: // ADTINYINT
 			dest[i] = int8(val.Val)
@@ -521,7 +558,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 130: // ADWCHAR
 			dest[i] = val.ToString() //uint16(val.Val)
 		case 131: // ADNUMERIC
-			sub := math.Pow(10, float64(sc.Val))
+			sub := math.Pow(10, float64(fi.scale))
 			dest[i] = float64(float64(val.Val) / sub)
 		case 132: // ADUSERDEFINED
 			dest[i] = uintptr(val.Val)
@@ -555,12 +592,9 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			conv := &ole.SafeArrayConversion{Array: sa}
 			dest[i] = conv.ToByteArray()
 		}
-		if typ.Val != 12 {
+		if fi.typ != 12 {
 			val.Clear()
 		}
-		typ.Clear()
-		sc.Clear()
-		field.Release()
 	}
 	rv, err := oleutil.CallMethod(rc.rc, "MoveNext")
 	if err != nil {
