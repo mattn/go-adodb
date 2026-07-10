@@ -515,17 +515,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 128: // ADBINARY
 			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
 			conv := &ole.SafeArrayConversion{Array: sa}
-			elems, err := conv.TotalElements(0)
-			if err != nil {
-				typ.Clear()
-				sc.Clear()
-				val.Clear()
-				field.Release()
-				return err
-			}
-			b := make([]byte, elems)
-			copy(b, (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems:elems])
-			dest[i] = b
+			dest[i] = conv.ToByteArray()
 		case 129: // ADCHAR
 			dest[i] = val.ToString() //uint8(val.Val)
 		case 130: // ADWCHAR
@@ -563,17 +553,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 205: // ADLONGVARBINARY
 			sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
 			conv := &ole.SafeArrayConversion{Array: sa}
-			elems, err := conv.TotalElements(0)
-			if err != nil {
-				typ.Clear()
-				sc.Clear()
-				val.Clear()
-				field.Release()
-				return err
-			}
-			b := make([]byte, elems)
-			copy(b, (*[1 << 30]byte)(unsafe.Pointer(uintptr(sa.Data)))[0:elems:elems])
-			dest[i] = b
+			dest[i] = conv.ToByteArray()
 		}
 		if typ.Val != 12 {
 			val.Clear()
