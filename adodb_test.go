@@ -108,6 +108,68 @@ func TestQuery(t *testing.T) {
 	}
 }
 
+func TestTypes(t *testing.T) {
+	dsn := createDB(t)
+	db, err := sql.Open("adodb", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err = db.Exec("create table types (id int not null primary key, t text, n double, f single, b bit, d datetime, c currency)"); err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2021, 6, 15, 13, 30, 45, 0, time.Local)
+	if _, err = db.Exec("insert into types(id, t, n, f, b, d, c) values(?, ?, ?, ?, ?, ?, ?)",
+		1, "hello", 3.5, 1.25, true, created, 12.34); err != nil {
+		t.Fatal(err)
+	}
+	// A row with NULLs in every nullable column.
+	if _, err = db.Exec("insert into types(id) values(2)"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read many times to make sure the cached per-column state stays correct.
+	for iter := 0; iter < 20; iter++ {
+		var (
+			text          sql.NullString
+			num, flt, cur sql.NullFloat64
+			b             sql.NullBool
+			d             sql.NullTime
+		)
+		if err = db.QueryRow("select t, n, f, b, d, c from types where id = 1").
+			Scan(&text, &num, &flt, &b, &d, &cur); err != nil {
+			t.Fatal(err)
+		}
+		if !text.Valid || text.String != "hello" {
+			t.Fatalf("iter %d: t = %#v, want \"hello\"", iter, text)
+		}
+		if !num.Valid || num.Float64 != 3.5 {
+			t.Fatalf("iter %d: n = %#v, want 3.5", iter, num)
+		}
+		if !flt.Valid || flt.Float64 != 1.25 {
+			t.Fatalf("iter %d: f = %#v, want 1.25", iter, flt)
+		}
+		if !b.Valid || !b.Bool {
+			t.Fatalf("iter %d: b = %#v, want true", iter, b)
+		}
+		if !d.Valid || !d.Time.Equal(created) {
+			t.Fatalf("iter %d: d = %#v, want %v", iter, d, created)
+		}
+		if !cur.Valid || cur.Float64 != 12.34 {
+			t.Fatalf("iter %d: c = %#v, want 12.34", iter, cur)
+		}
+
+		var t2, n2 sql.NullString
+		if err = db.QueryRow("select t, n from types where id = 2").Scan(&t2, &n2); err != nil {
+			t.Fatal(err)
+		}
+		if t2.Valid || n2.Valid {
+			t.Fatalf("iter %d: expected NULLs, got t=%#v n=%#v", iter, t2, n2)
+		}
+	}
+}
+
 func TestBinary(t *testing.T) {
 	dsn := createDB(t)
 	db, err := sql.Open("adodb", dsn)
