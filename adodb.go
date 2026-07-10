@@ -32,6 +32,15 @@ func fullRelease(obj releaser) {
 	}
 }
 
+func dispatchFromVariant(v *ole.VARIANT) *ole.IDispatch {
+	dispatch := v.ToIDispatch()
+	if dispatch != nil {
+		dispatch.AddRef()
+	}
+	v.Clear()
+	return dispatch
+}
+
 func init() {
 	sql.Register("adodb", &AdodbDriver{})
 }
@@ -210,8 +219,7 @@ func (c *AdodbConn) prepare(ctx context.Context, query string) (driver.Stmt, err
 	if err != nil {
 		return nil, err
 	}
-	ps := val.ToIDispatch()
-	val.Clear()
+	ps := dispatchFromVariant(val)
 
 	pc := -1
 	rv, err = oleutil.GetProperty(ps, "Count")
@@ -262,8 +270,7 @@ func (s *AdodbStmt) bind(args []namedValue) error {
 		if err != nil {
 			return err
 		}
-		item := val.ToIDispatch()
-		val.Clear()
+		item := dispatchFromVariant(val)
 		t, err := oleutil.GetProperty(item, "Type")
 		if err != nil {
 			item.Release()
@@ -307,9 +314,7 @@ func (s *AdodbStmt) query(ctx context.Context, args []namedValue) (driver.Rows, 
 	if err != nil {
 		return nil, err
 	}
-	rc := res.ToIDispatch()
-	rc.AddRef()
-	res.Clear()
+	rc := dispatchFromVariant(res)
 	return &AdodbRows{s: s, rc: rc, nc: -1, cols: nil}, nil
 }
 
@@ -380,9 +385,7 @@ func (rc *AdodbRows) prepareFields(n int) error {
 	if err != nil {
 		return err
 	}
-	rc.fields = unknown.ToIDispatch()
-	rc.fields.AddRef()
-	unknown.Clear()
+	rc.fields = dispatchFromVariant(unknown)
 
 	for i := 0; i < n; i++ {
 		var varval ole.VARIANT
@@ -392,9 +395,7 @@ func (rc *AdodbRows) prepareFields(n int) error {
 		if err != nil {
 			return err
 		}
-		field := rv.ToIDispatch()
-		field.AddRef()
-		rv.Clear()
+		field := dispatchFromVariant(rv)
 		typ, err := oleutil.GetProperty(field, "Type")
 		if err != nil {
 			field.Release()
@@ -439,8 +440,7 @@ func (rc *AdodbRows) Columns() []string {
 		if err != nil {
 			return []string{}
 		}
-		fields := unknown.ToIDispatch()
-		unknown.Clear()
+		fields := dispatchFromVariant(unknown)
 		defer fields.Release()
 		rv, err := oleutil.GetProperty(fields, "Count")
 		if err != nil {
@@ -457,8 +457,7 @@ func (rc *AdodbRows) Columns() []string {
 			if err != nil {
 				return []string{}
 			}
-			item := val.ToIDispatch()
-			val.Clear()
+			item := dispatchFromVariant(val)
 			name, err := oleutil.GetProperty(item, "Name")
 			if err != nil {
 				item.Release()
@@ -527,7 +526,46 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 		case 11: // ADBOOLEAN
 			dest[i] = val.Val != 0
 		case 12: // ADVARIANT
-			dest[i] = val
+			switch val.VT {
+			case ole.VT_EMPTY, ole.VT_NULL:
+				dest[i] = nil
+			case ole.VT_I1:
+				dest[i] = int8(val.Val)
+			case ole.VT_UI1:
+				dest[i] = uint8(val.Val)
+			case ole.VT_I2:
+				dest[i] = int64(int16(val.Val))
+			case ole.VT_UI2:
+				dest[i] = uint16(val.Val)
+			case ole.VT_I4, ole.VT_INT:
+				dest[i] = int64(int32(val.Val))
+			case ole.VT_UI4, ole.VT_UINT:
+				dest[i] = uint32(val.Val)
+			case ole.VT_I8:
+				dest[i] = int64(val.Val)
+			case ole.VT_UI8:
+				dest[i] = uint64(val.Val)
+			case ole.VT_R4:
+				dest[i] = float64(math.Float32frombits(uint32(val.Val)))
+			case ole.VT_R8:
+				dest[i] = math.Float64frombits(uint64(val.Val))
+			case ole.VT_CY:
+				dest[i] = float64(val.Val) / 10000
+			case ole.VT_DATE:
+				d, t := math.Modf(math.Float64frombits(uint64(val.Val)))
+				t = math.Abs(t)
+				dest[i] = time.Date(1899, 12, 30+int(d), 0, 0, int(t*86400+0.5), 0, time.Local)
+			case ole.VT_BSTR:
+				dest[i] = val.ToString()
+			case ole.VT_BOOL:
+				dest[i] = val.Val != 0
+			case ole.VT_ARRAY | ole.VT_UI1:
+				sa := (*ole.SafeArray)(unsafe.Pointer(uintptr(val.Val)))
+				conv := &ole.SafeArrayConversion{Array: sa}
+				dest[i] = conv.ToByteArray()
+			default:
+				dest[i] = nil
+			}
 		case 13: // ADIUNKNOWN
 			// See ADIDISPATCH above: the pointer is released by val.Clear().
 			dest[i] = nil
@@ -592,9 +630,7 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			conv := &ole.SafeArrayConversion{Array: sa}
 			dest[i] = conv.ToByteArray()
 		}
-		if fi.typ != 12 {
-			val.Clear()
-		}
+		val.Clear()
 	}
 	rv, err := oleutil.CallMethod(rc.rc, "MoveNext")
 	if err != nil {
@@ -613,8 +649,7 @@ func (rc *AdodbRows) ColumnTypeDatabaseTypeName(i int) string {
 	if err != nil {
 		return ""
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
+	fields := dispatchFromVariant(unknown)
 	defer fields.Release()
 
 	var varval ole.VARIANT
@@ -624,8 +659,7 @@ func (rc *AdodbRows) ColumnTypeDatabaseTypeName(i int) string {
 	if err != nil {
 		return ""
 	}
-	item := val.ToIDispatch()
-	val.Clear()
+	item := dispatchFromVariant(val)
 	typ, err := oleutil.GetProperty(item, "Type")
 	if err != nil {
 		item.Release()
@@ -719,8 +753,7 @@ func (rc *AdodbRows) ColumnTypeLength(i int) (length int64, ok bool) {
 	if err != nil {
 		return 0, false
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
+	fields := dispatchFromVariant(unknown)
 	defer fields.Release()
 
 	var varval ole.VARIANT
@@ -730,8 +763,7 @@ func (rc *AdodbRows) ColumnTypeLength(i int) (length int64, ok bool) {
 	if err != nil {
 		return 0, false
 	}
-	item := val.ToIDispatch()
-	val.Clear()
+	item := dispatchFromVariant(val)
 	siz, err := oleutil.GetProperty(item, "DefinedSize")
 	if err != nil {
 		item.Release()
@@ -752,8 +784,7 @@ func (rc *AdodbRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 	if err != nil {
 		return false, false
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
+	fields := dispatchFromVariant(unknown)
 	defer fields.Release()
 
 	var varval ole.VARIANT
@@ -763,8 +794,7 @@ func (rc *AdodbRows) ColumnTypeNullable(i int) (nullable, ok bool) {
 	if err != nil {
 		return false, false
 	}
-	item := val.ToIDispatch()
-	val.Clear()
+	item := dispatchFromVariant(val)
 	att, err := oleutil.GetProperty(item, "Attributes")
 	if err != nil {
 		item.Release()
@@ -785,8 +815,7 @@ func (rc *AdodbRows) ColumnTypeScanType(i int) reflect.Type {
 	if err != nil {
 		return reflect.TypeOf(nil)
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
+	fields := dispatchFromVariant(unknown)
 	defer fields.Release()
 
 	var varval ole.VARIANT
@@ -796,8 +825,7 @@ func (rc *AdodbRows) ColumnTypeScanType(i int) reflect.Type {
 	if err != nil {
 		return reflect.TypeOf(nil)
 	}
-	item := val.ToIDispatch()
-	val.Clear()
+	item := dispatchFromVariant(val)
 	typ, err := oleutil.GetProperty(item, "Type")
 	if err != nil {
 		item.Release()
@@ -895,8 +923,7 @@ func (rc *AdodbRows) ColumnTypePrecisionScale(i int) (precision, scale int64, ok
 	if err != nil {
 		return 0, 0, false
 	}
-	fields := unknown.ToIDispatch()
-	unknown.Clear()
+	fields := dispatchFromVariant(unknown)
 	defer fields.Release()
 
 	var varval ole.VARIANT
@@ -907,8 +934,7 @@ func (rc *AdodbRows) ColumnTypePrecisionScale(i int) (precision, scale int64, ok
 		return 0, 0, false
 	}
 
-	item := val.ToIDispatch()
-	val.Clear()
+	item := dispatchFromVariant(val)
 
 	typ, err := oleutil.GetProperty(item, "Type")
 	if err != nil {
@@ -916,24 +942,29 @@ func (rc *AdodbRows) ColumnTypePrecisionScale(i int) (precision, scale int64, ok
 		return 0, 0, false
 	}
 	if typ.Val != 131 {
+		typ.Clear()
 		item.Release()
 		return 0, 0, true
 	}
 
 	prec, err := oleutil.GetProperty(item, "Precision")
 	if err != nil {
+		typ.Clear()
 		item.Release()
 		return 0, 0, false
 	}
 
 	scl, err := oleutil.GetProperty(item, "NumericScale")
 	if err != nil {
+		typ.Clear()
+		prec.Clear()
 		item.Release()
 		return 0, 0, false
 	}
 
 	precval := prec.Val
 	sclval := scl.Val
+	typ.Clear()
 	prec.Clear()
 	scl.Clear()
 	item.Release()
