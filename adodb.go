@@ -517,6 +517,10 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			conv := &ole.SafeArrayConversion{Array: sa}
 			elems, err := conv.TotalElements(0)
 			if err != nil {
+				typ.Clear()
+				sc.Clear()
+				val.Clear()
+				field.Release()
 				return err
 			}
 			b := make([]byte, elems)
@@ -561,6 +565,10 @@ func (rc *AdodbRows) Next(dest []driver.Value) error {
 			conv := &ole.SafeArrayConversion{Array: sa}
 			elems, err := conv.TotalElements(0)
 			if err != nil {
+				typ.Clear()
+				sc.Clear()
+				val.Clear()
+				field.Release()
 				return err
 			}
 			b := make([]byte, elems)
